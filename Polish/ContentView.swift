@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var outputText = ""
     @State private var isRunning = false
+    @State private var foundFiles: [URL] = []
 
     var body: some View {
         VStack(spacing: 20) {
@@ -20,10 +21,24 @@ struct ContentView: View {
             Button(action: {
                 runBrewCleanup()
             }) {
-                Text(isRunning ? "Running..." : "Run")
+                Text(isRunning ? "Running..." : "Run Brew Cleanup")
                     .frame(minWidth: 200)
                     .padding()
                     .background(isRunning ? Color.gray : Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+            }
+            .disabled(isRunning)
+
+            Button(action: {
+                Task {
+                    await findFiles()
+                }
+            }) {
+                Text(isRunning ? "Searching..." : "Find Files")
+                    .frame(minWidth: 200)
+                    .padding()
+                    .background(isRunning ? Color.gray : Color.orange)
                     .foregroundColor(.white)
                     .cornerRadius(10)
             }
@@ -35,6 +50,7 @@ struct ContentView: View {
                     .padding()
                     .background(Color(.systemGray))
                     .cornerRadius(8)
+                    .foregroundStyle(.black)
             }
             .frame(height: 300)
             .padding()
@@ -49,6 +65,23 @@ struct ContentView: View {
             self.outputText = output
             self.isRunning = false
         }
+    }
+
+    func findFiles() async {
+        isRunning = true
+        outputText = ""
+
+        var files: [URL] = []
+            files = await FindJunk.scanForUnneededFiles(progress: { fileURL in
+                DispatchQueue.main.async {
+                    //self.outputText += fileURL.path + "\n"
+                }
+            })
+            
+            DispatchQueue.main.async {
+                self.outputText += "\nFile search completed. Found \(files.count) files.\n"
+                self.isRunning = false
+            }
     }
 
 }
