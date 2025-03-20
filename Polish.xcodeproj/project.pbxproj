@@ -1,4 +1,4 @@
-// !$*UTF8*$!
+
 {
 	archiveVersion = 1;
 	classes = {
@@ -311,7 +311,7 @@
 				49DD473E2D8AF77C001DFD91 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 		49DD473F2D8AF77C001DFD91 /* Build configuration list for PBXNativeTarget "Polish" */ = {
 			isa = XCConfigurationList;
@@ -320,7 +320,7 @@
 				49DD47412D8AF77C001DFD91 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 	};
