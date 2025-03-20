@@ -41,10 +41,8 @@ class FindJunk {
                             // Calculate size and report progress only for directories one level deep
                             let size = calculateDirectorySize(fileURL)
                             progress(fileURL)
-                        }
-
-                        // Continue adding all files to results for potential cleanup
-                        if !isDir.boolValue {
+                        } else {
+                            // For files, add to results but don't report progress
                             results.append(fileURL)
                         }
                     }
@@ -94,7 +92,7 @@ class FindJunk {
                             progress(fileURL)
                         }
 
-                        // Add to results
+                        // Add to results regardless of whether it's a file or directory
                         results.append(fileURL)
                     }
                 }
@@ -103,13 +101,18 @@ class FindJunk {
 
         // Calculate and report the total size at the end
         let totalSize = results.reduce(Int64(0)) { total, url in
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                if let fileSize = attributes[.size] as? Int64 {
-                    return total + fileSize
+            if isFile(url) {
+                do {
+                    let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+                    if let fileSize = attributes[.size] as? Int64 {
+                        return total + fileSize
+                    }
+                } catch {
+                    // Ignore errors
                 }
-            } catch {
-                // Ignore errors
+            } else {
+                // For directories, calculate their entire size
+                return total + calculateDirectorySize(url)
             }
             return total
         }
@@ -224,6 +227,60 @@ class FindJunk {
         }
 
         return Set(allAppNames)
+    }
+
+    static func processFilesAndDirectories(at path: String, handler: (URL, Bool, Int64) -> Void) -> Int64 {
+        let fileManager = FileManager.default
+        let path = Helper.escapePathForShell(path)
+        let url = URL(fileURLWithPath: path)
+        var totalSize: Int64 = 0
+
+        // Check if the path exists
+        guard fileManager.fileExists(atPath: path) else {
+            print("Path does not exist: \(path)")
+            return -1
+        }
+
+        // Create an enumerator to traverse all files and directories
+        guard
+            let enumerator = fileManager.enumerator(
+                at: url,
+                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
+                options: [.skipsHiddenFiles],  // Using empty options to include hidden files
+                errorHandler: { (url, error) -> Bool in
+                    print("Error accessing \(url): \(error)")
+                    return true  // Continue enumeration
+                }
+            )
+        else {
+            print("Failed to create directory enumerator for \(path)")
+            return -1
+        }
+
+        // Process each item found by the enumerator
+        for case let itemURL as URL in enumerator {
+            do {
+                let resourceValues = try itemURL.resourceValues(forKeys: [
+                    .isDirectoryKey, .fileSizeKey,
+                ])
+                let isDirectory = resourceValues.isDirectory ?? false
+
+                // Get file size - directories themselves have zero size
+                var fileSize: Int64 = 0
+                if !isDirectory, let size = resourceValues.fileSize {
+                    fileSize = Int64(size)
+                    totalSize += fileSize
+                }
+
+                // Call the handler with the item URL, directory flag, and size
+                handler(itemURL, isDirectory, fileSize)
+
+            } catch {
+                print("Error reading resource values for \(itemURL): \(error)")
+            }
+        }
+
+        return totalSize
     }
 
 }

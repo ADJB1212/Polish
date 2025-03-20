@@ -70,6 +70,25 @@ class Commands {
 
         runCommand(command: command, completion: completion)
     }
+    
+    static func removeFileOrDirectory(path: String, completion: @escaping (Any) -> Void) {
+        let pathForShell = Helper.escapePathForShell(path)
+        switch Helper.getPathType(path){
+        case .directory:
+            runCommand(command: "rm -rf \(pathForShell)", completion: completion)
+            break
+        case .file:
+            runCommand(command: "rm -f \(pathForShell)", completion: completion)
+            break
+        case .notFound:
+            completion("Error for item at \(pathForShell)\n")
+            break
+        }
+        
+        
+        
+    }
+    
 
     private static func runCommand(command: String, completion: @escaping (String) -> Void) {
         var outputText = ""
