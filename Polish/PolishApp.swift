@@ -12,11 +12,7 @@ import SwiftUI
 struct PolishApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
+    var body: some Scene { WindowGroup { ContentView() } }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -29,12 +25,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         startMemoryMonitoring()
 
         memoryWarningObserver = NotificationCenter.default.addObserver(
-            forName: NSNotification.Name("MemoryWarning"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.handleMemoryWarning()
-        }
+            forName: NSNotification.Name("MemoryWarning"), object: nil, queue: .main
+        ) { [weak self] _ in self?.handleMemoryWarning() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -50,8 +42,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startMemoryMonitoring() {
         memoryMonitorTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) {
-            [weak self] _ in
-            self?.checkMemoryUsage()
+            [weak self] _ in self?.checkMemoryUsage()
         }
     }
 
@@ -62,9 +53,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func checkMemoryUsage() {
         let memoryUsage = getCurrentMemoryUsage()
-        if memoryUsage > memoryThreshold {
-            handleMemoryWarning()
-        }
+        if memoryUsage > memoryThreshold { handleMemoryWarning() }
     }
 
     private func handleMemoryWarning() {
@@ -99,9 +88,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        if kerr == KERN_SUCCESS {
-            totalSize = Double(stats1.max_mem)
-        }
+        if kerr == KERN_SUCCESS { totalSize = Double(stats1.max_mem) }
 
         var count = UInt32(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
         var stats = vm_statistics64()

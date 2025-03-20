@@ -11,9 +11,7 @@ import SwiftUI
 
 class FindJunk {
     static func scanForUnneededFiles(
-        maxFilesToScan: Int = 5000,
-        maxDepth: Int = 6,
-        progress: @escaping (Any) -> Void
+        maxFilesToScan: Int = 5000, maxDepth: Int = 6, progress: @escaping (Any) -> Void
     ) async -> [URL] {
 
         if !Commands.checkSystemResources() {
@@ -22,9 +20,7 @@ class FindJunk {
         }
 
         let cacheDirectories: [String] = [
-            NSHomeDirectory() + "/Library/Caches",
-            "/tmp",
-            "/private/tmp",
+            NSHomeDirectory() + "/Library/Caches", "/tmp", "/private/tmp",
         ]
 
         var results: [URL] = []
@@ -37,10 +33,7 @@ class FindJunk {
 
                 group.addTask {
                     return await scanDirectory(
-                        dirURL,
-                        maxDepth: maxDepth,
-                        maxFiles: maxFilesToScan / 3,
-                        progress: progress
+                        dirURL, maxDepth: maxDepth, maxFiles: maxFilesToScan / 3, progress: progress
                     )
                 }
             }
@@ -61,9 +54,7 @@ class FindJunk {
             if isFile(url) {
                 do {
                     let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                    if let fileSize = attributes[.size] as? Int64 {
-                        return total + fileSize
-                    }
+                    if let fileSize = attributes[.size] as? Int64 { return total + fileSize }
                 } catch {
 
                 }
@@ -80,10 +71,7 @@ class FindJunk {
     }
 
     private static func scanDirectory(
-        _ dirURL: URL,
-        maxDepth: Int,
-        maxFiles: Int,
-        progress: @escaping (Any) -> Void
+        _ dirURL: URL, maxDepth: Int, maxFiles: Int, progress: @escaping (Any) -> Void
     ) async -> [URL] {
         var results: [URL] = []
         let fileManager = FileManager.default
@@ -97,23 +85,17 @@ class FindJunk {
 
             let (currentDir, depth) = directoriesToScan.removeFirst()
 
-            if depth > maxDepth {
-                continue
-            }
+            if depth > maxDepth { continue }
 
             guard
                 let contentsURLs = try? fileManager.contentsOfDirectory(
-                    at: currentDir,
-                    includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
-                    options: [.skipsHiddenFiles]
-                )
+                    at: currentDir, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
+                    options: [.skipsHiddenFiles])
             else { continue }
 
             for url in contentsURLs {
 
-                if scannedCount >= maxFiles {
-                    break
-                }
+                if scannedCount >= maxFiles { break }
 
                 do {
                     let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey])
@@ -124,32 +106,27 @@ class FindJunk {
                         if depth < maxDepth {
                             directoriesToScan.append((url: url, depth: depth + 1))
 
-                            if depth <= 1 {
-                                progress(url)
-                            }
+                            if depth <= 1 { progress(url) }
                         }
                     } else {
 
                         results.append(url)
                         scannedCount += 1
 
-                        if depth <= 1 && scannedCount % 5 == 0 {
-                            progress(url)
-                        }
+                        if depth <= 1 && scannedCount % 5 == 0 { progress(url) }
                     }
                 } catch {
 
                     continue
                 }
 
-                if scannedCount % 20 == 0 {
-                    await Task.yield()
-                }
+                if scannedCount % 20 == 0 { await Task.yield() }
             }
         }
 
         return results
     }
+
     static func estimateDirectorySize(_ url: URL, maxDepth: Int = 2) -> Int64 {
         let fileManager = FileManager.default
         var totalSize: Int64 = 0
@@ -162,25 +139,19 @@ class FindJunk {
         while !directoriesToScan.isEmpty && scannedItems < maxItems {
             let (currentDir, depth) = directoriesToScan.removeFirst()
 
-            if depth > maxDepth {
-                continue
-            }
+            if depth > maxDepth { continue }
 
             guard
                 let contents = try? fileManager.contentsOfDirectory(
-                    at: currentDir,
-                    includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
-                    options: [.skipsHiddenFiles]
-                )
+                    at: currentDir, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
+                    options: [.skipsHiddenFiles])
             else { continue }
 
             let samplesToTake = min(contents.count, 20)
             let sampleInterval = max(1, contents.count / samplesToTake)
 
             for i in stride(from: 0, to: contents.count, by: sampleInterval) {
-                if scannedItems >= maxItems {
-                    break
-                }
+                if scannedItems >= maxItems { break }
 
                 if i < contents.count {
                     let fileURL = contents[i]
@@ -191,9 +162,7 @@ class FindJunk {
                         ])
 
                         if resourceValues.isDirectory ?? false {
-                            if depth < maxDepth {
-                                directoriesToScan.append((fileURL, depth + 1))
-                            }
+                            if depth < maxDepth { directoriesToScan.append((fileURL, depth + 1)) }
                         } else if let fileSize = resourceValues.fileSize {
                             totalSize += Int64(fileSize)
                         }
@@ -224,30 +193,22 @@ class FindJunk {
         let maxFilesToScan = 1000
 
         if let enumerator = fileManager.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.fileSizeKey],
-            options: [.skipsHiddenFiles],
+            at: url, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles],
             errorHandler: nil)
         {
             for case let fileURL as URL in enumerator {
 
                 filesScanned += 1
-                if filesScanned > maxFilesToScan {
-                    break
-                }
+                if filesScanned > maxFilesToScan { break }
 
                 do {
                     let attributes = try fileManager.attributesOfItem(atPath: fileURL.path)
-                    if let fileSize = attributes[.size] as? Int64 {
-                        totalSize += fileSize
-                    }
+                    if let fileSize = attributes[.size] as? Int64 { totalSize += fileSize }
                 } catch {
 
                 }
 
-                if filesScanned % 100 == 0 {
-                    Thread.sleep(forTimeInterval: 0.001)
-                }
+                if filesScanned % 100 == 0 { Thread.sleep(forTimeInterval: 0.001) }
             }
         }
 
@@ -275,15 +236,11 @@ class FindJunk {
 
         guard
             let contents = try? fm.contentsOfDirectory(
-                at: dirURL,
-                includingPropertiesForKeys: nil,
-                options: [.skipsHiddenFiles])
+                at: dirURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
         else { return [] }
 
         for url in contents {
-            if itemsProcessed >= maxItems {
-                break
-            }
+            if itemsProcessed >= maxItems { break }
 
             if FindJunk.isLikelyLeftover(url) {
                 results.append(url)
@@ -324,9 +281,7 @@ class FindJunk {
         let fileManager = FileManager.default
 
         let applicationDirs = [
-            "/Applications",
-            NSHomeDirectory() + "/Applications",
-            "/System/Applications",
+            "/Applications", NSHomeDirectory() + "/Applications", "/System/Applications",
         ]
 
         for dir in applicationDirs {
@@ -343,9 +298,7 @@ class FindJunk {
             var appCount = 0
             for item in topLevelApps {
 
-                if appCount > 100 {
-                    break
-                }
+                if appCount > 100 { break }
 
                 let fullPath = "\(dir)/\(item)"
 
@@ -366,9 +319,7 @@ class FindJunk {
                             allAppNames.append(name)
                             appCount += 1
 
-                            if appCount > 100 {
-                                break
-                            }
+                            if appCount > 100 { break }
                         }
                     }
                 }
@@ -395,14 +346,12 @@ class FindJunk {
 
         guard
             let enumerator = fileManager.enumerator(
-                at: url,
-                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
+                at: url, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
                 options: [.skipsHiddenFiles],
                 errorHandler: { (url, error) -> Bool in
                     print("Error accessing \(url): \(error)")
                     return true
-                }
-            )
+                })
         else {
             print("Failed to create directory enumerator for \(path)")
             return -1
@@ -430,12 +379,8 @@ class FindJunk {
 
                 handler(itemURL, isDirectory, fileSize)
 
-                if processedCount % 100 == 0 {
-                    Thread.sleep(forTimeInterval: 0.001)
-                }
-            } catch {
-                print("Error reading resource values for \(itemURL): \(error)")
-            }
+                if processedCount % 100 == 0 { Thread.sleep(forTimeInterval: 0.001) }
+            } catch { print("Error reading resource values for \(itemURL): \(error)") }
         }
 
         return totalSize

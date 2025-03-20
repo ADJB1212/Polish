@@ -30,22 +30,15 @@ struct ContentView: View {
             HeaderView()
 
             ButtonsView(
-                isRunning: $isRunning,
-                runBrewCleanup: runBrewCleanup,
-                runPipCleanup: runPipCleanup,
-                clearTrash: clearTrash,
-                findFiles: findFiles
+                isRunning: $isRunning, runBrewCleanup: runBrewCleanup, runPipCleanup: runPipCleanup,
+                clearTrash: clearTrash, findFiles: findFiles
 
             )
 
             OutputView(
-                fileItems: fileItems,
-                totalSizeText: totalSizeText,
-                outputText: outputText,
-                scrollToBottom: $scrollToBottom
-            )
-        }
-        .padding()
+                fileItems: fileItems, totalSizeText: totalSizeText, outputText: outputText,
+                scrollToBottom: $scrollToBottom)
+        }.padding()
     }
 
     private func showAlert(title: String, message: String) {
@@ -101,13 +94,8 @@ struct ContentView: View {
                     fromByteCount: size, countStyle: .file)
 
                 let fileItem = FileItem(
-                    name: url.lastPathComponent,
-                    path: path,
-                    isDirectory: isDirectory,
-                    size: size,
-                    depth: relativeDepth,
-                    formattedSize: formattedSize
-                )
+                    name: url.lastPathComponent, path: path, isDirectory: isDirectory, size: size,
+                    depth: relativeDepth, formattedSize: formattedSize)
 
                 DispatchQueue.main.async {
                     self.fileItems.append(fileItem)
@@ -181,8 +169,7 @@ struct ContentView: View {
 
         var files: [URL] = []
         files = await FindJunk.scanForUnneededFiles(
-            maxFilesToScan: 1000,
-            maxDepth: 5,
+            maxFilesToScan: 1000, maxDepth: 5,
             progress: { item in
 
                 var messageToAdd = ""
@@ -219,13 +206,7 @@ struct ContentView: View {
     }
 }
 
-struct HeaderView: View {
-    var body: some View {
-        Text("Cleanup Utility")
-            .font(.title)
-            .padding()
-    }
-}
+struct HeaderView: View { var body: some View { Text("Cleanup Utility").font(.title).padding() } }
 
 struct ButtonsView: View {
     @Binding var isRunning: Bool
@@ -237,38 +218,23 @@ struct ButtonsView: View {
     var body: some View {
         VStack(spacing: 15) {
             Button(action: clearTrash) {
-                Text(isRunning ? "Running..." : "Process Files")
-                    .frame(minWidth: 200)
-                    .padding()
-                    .background(isRunning ? Color.gray : Color.blue)
-                    .foregroundColor(.white)
+                Text(isRunning ? "Running..." : "Process Files").frame(minWidth: 200).padding()
+                    .background(isRunning ? Color.gray : Color.blue).foregroundColor(.white)
                     .cornerRadius(10)
-            }
-            .disabled(isRunning)
+            }.disabled(isRunning)
 
             Button(action: runPipCleanup) {
-                Text(isRunning ? "Searching..." : "Clear Python Cache")
-                    .frame(minWidth: 200)
-                    .padding()
-                    .background(isRunning ? Color.gray : Color.yellow)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-            }
-            .disabled(isRunning)
+                Text(isRunning ? "Searching..." : "Clear Python Cache").frame(minWidth: 200)
+                    .padding().background(isRunning ? Color.gray : Color.yellow).foregroundColor(
+                        .white
+                    ).cornerRadius(10)
+            }.disabled(isRunning)
 
-            Button(action: {
-                Task {
-                    await findFiles()
-                }
-            }) {
-                Text(isRunning ? "Searching..." : "Find Files")
-                    .frame(minWidth: 200)
-                    .padding()
-                    .background(isRunning ? Color.gray : Color.orange)
-                    .foregroundColor(.white)
+            Button(action: { Task { await findFiles() } }) {
+                Text(isRunning ? "Searching..." : "Find Files").frame(minWidth: 200).padding()
+                    .background(isRunning ? Color.gray : Color.orange).foregroundColor(.white)
                     .cornerRadius(10)
-            }
-            .disabled(isRunning)
+            }.disabled(isRunning)
         }
     }
 }
@@ -284,39 +250,25 @@ struct OutputView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     if !fileItems.isEmpty {
-                        FileItemsView(
-                            fileItems: fileItems,
-                            totalSizeText: totalSizeText
-                        )
+                        FileItemsView(fileItems: fileItems, totalSizeText: totalSizeText)
                     } else {
                         TextOutputView(outputText: outputText)
                     }
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(height: 300)
-            .background(Color(.systemGray))
-            .cornerRadius(8)
-            .onChange(of: scrollToBottom) {
+                }.padding().frame(maxWidth: .infinity, alignment: .leading)
+            }.frame(height: 300).background(Color(.systemGray)).cornerRadius(8).onChange(
+                of: scrollToBottom
+            ) {
                 if scrollToBottom {
                     withAnimation {
                         scrollProxy.scrollTo(
                             fileItems.isEmpty ? "textBottom" : "bottom", anchor: .bottom)
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        scrollToBottom = false
-                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { scrollToBottom = false }
                 }
-            }
-            .onChange(of: fileItems.count) {
+            }.onChange(of: fileItems.count) { scrollToBottom = true }.onChange(of: outputText) {
                 scrollToBottom = true
             }
-            .onChange(of: outputText) {
-                scrollToBottom = true
-            }
-        }
-        .padding()
+        }.padding()
     }
 }
 
@@ -326,15 +278,10 @@ struct FileItemsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            ForEach(fileItems) { item in
-                FileItemRow(item: item)
-            }
+            ForEach(fileItems) { item in FileItemRow(item: item) }
 
             if !totalSizeText.isEmpty {
-                Text(totalSizeText)
-                    .font(.headline)
-                    .padding(.top, 8)
-                    .id("bottom")
+                Text(totalSizeText).font(.headline).padding(.top, 8).id("bottom")
             }
         }
     }
@@ -346,26 +293,19 @@ struct FileItemRow: View {
     var body: some View {
         HStack(spacing: 4) {
 
-            ForEach(0..<(item.depth - 1), id: \.self) { _ in
-                Spacer()
-                    .frame(width: 20)
-            }
+            ForEach(0..<(item.depth - 1), id: \.self) { _ in Spacer().frame(width: 20) }
 
-            Image(systemName: item.isDirectory ? "folder" : "doc")
-                .foregroundColor(item.isDirectory ? .blue : .gray)
+            Image(systemName: item.isDirectory ? "folder" : "doc").foregroundColor(
+                item.isDirectory ? .blue : .gray)
 
-            Text(item.name)
-                .foregroundColor(.primary)
+            Text(item.name).foregroundColor(.primary)
 
             Spacer()
 
             if !item.isDirectory {
-                Text(item.formattedSize)
-                    .foregroundColor(.secondary)
-                    .font(.caption)
+                Text(item.formattedSize).foregroundColor(.secondary).font(.caption)
             }
-        }
-        .padding(.vertical, 2)
+        }.padding(.vertical, 2)
     }
 }
 
@@ -374,13 +314,9 @@ struct TextOutputView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(outputText)
-                .font(.system(.body, design: .monospaced))
-                .lineLimit(nil)
+            Text(outputText).font(.system(.body, design: .monospaced)).lineLimit(nil)
 
-            Color.clear
-                .frame(height: 1)
-                .id("textBottom")
+            Color.clear.frame(height: 1).id("textBottom")
         }
     }
 }

@@ -36,9 +36,7 @@ class Helper {
 
         let decodedPath = path.removingPercentEncoding ?? path
 
-        if decodedPath.isEmpty {
-            return "\"\""
-        }
+        if decodedPath.isEmpty { return "\"\"" }
 
         let needsEscaping =
             decodedPath.contains(" ") || decodedPath.contains("(") || decodedPath.contains(")")
@@ -49,15 +47,11 @@ class Helper {
             || decodedPath.contains("`") || decodedPath.contains("\\") || decodedPath.contains("!")
             || decodedPath.contains("#") || decodedPath.contains("~")
 
-        if !needsEscaping {
-            return decodedPath
-        }
+        if !needsEscaping { return decodedPath }
 
         var escapedPath = ""
         for character in decodedPath {
-            if " ()[]&;$\\'\"`<>|*?!#~".contains(character) {
-                escapedPath.append("\\")
-            }
+            if " ()[]&;$\\'\"`<>|*?!#~".contains(character) { escapedPath.append("\\") }
             escapedPath.append(character)
         }
 
@@ -74,30 +68,19 @@ public enum DataSizeBase: String {
 public struct Units {
     public let bytes: Int64
 
-    public init(bytes: Int64) {
-        self.bytes = bytes
-    }
+    public init(bytes: Int64) { self.bytes = bytes }
 
-    public var kilobytes: Double {
-        return Double(bytes) / 1_000
-    }
-    public var megabytes: Double {
-        return kilobytes / 1_000
-    }
-    public var gigabytes: Double {
-        return megabytes / 1_000
-    }
-    public var terabytes: Double {
-        return gigabytes / 1_000
-    }
+    public var kilobytes: Double { return Double(bytes) / 1_000 }
+    public var megabytes: Double { return kilobytes / 1_000 }
+    public var gigabytes: Double { return megabytes / 1_000 }
+    public var terabytes: Double { return gigabytes / 1_000 }
 
     public func getReadableTuple(base: DataSizeBase = .byte) -> (String, String) {
         let stringBase = base == .byte ? "B" : "b"
         let multiplier: Double = base == .byte ? 1 : 8
 
         switch bytes {
-        case 0..<1_000:
-            return ("0", "K\(stringBase)/s")
+        case 0..<1_000: return ("0", "K\(stringBase)/s")
         case 1_000..<(1_000 * 1_000):
             return (String(format: "%.0f", kilobytes * multiplier), "K\(stringBase)/s")
         case 1_000..<(1_000 * 1_000 * 100):
@@ -106,8 +89,7 @@ public struct Units {
             return (String(format: "%.0f", megabytes * multiplier), "M\(stringBase)/s")
         case (1_000 * 1_000 * 1_000)...Int64.max:
             return (String(format: "%.1f", gigabytes * multiplier), "G\(stringBase)/s")
-        default:
-            return (String(format: "%.0f", kilobytes * multiplier), "K\(stringBase)B/s")
+        default: return (String(format: "%.0f", kilobytes * multiplier), "K\(stringBase)B/s")
         }
     }
 
@@ -144,9 +126,7 @@ public struct Units {
         formatter.isAdaptive = true
 
         var value = formatter.string(fromByteCount: Int64(self.bytes))
-        if let idx = value.lastIndex(of: ",") {
-            value.replaceSubrange(idx...idx, with: ".")
-        }
+        if let idx = value.lastIndex(of: ",") { value.replaceSubrange(idx...idx, with: ".") }
 
         return value
     }
@@ -171,9 +151,7 @@ public struct SizeUnit: KeyValue_p, Equatable {
     public let key: String
     public let value: String
 
-    public static func == (lhs: SizeUnit, rhs: SizeUnit) -> Bool {
-        return lhs.key == rhs.key
-    }
+    public static func == (lhs: SizeUnit, rhs: SizeUnit) -> Bool { return lhs.key == rhs.key }
 }
 
 extension SizeUnit: CaseIterable {
@@ -183,9 +161,7 @@ extension SizeUnit: CaseIterable {
     public static var GB: SizeUnit { return SizeUnit(key: "GB", value: "GB") }
     public static var TB: SizeUnit { return SizeUnit(key: "TB", value: "TB") }
 
-    public static var allCases: [SizeUnit] {
-        [.byte, .KB, .MB, .GB, .TB]
-    }
+    public static var allCases: [SizeUnit] { [.byte, .KB, .MB, .GB, .TB] }
 
     public static func fromString(_ key: String, defaultValue: SizeUnit = .byte) -> SizeUnit {
         return SizeUnit.allCases.first { $0.key == key } ?? defaultValue
@@ -193,16 +169,11 @@ extension SizeUnit: CaseIterable {
 
     public func toBytes(_ value: Int) -> Int {
         switch self {
-        case .KB:
-            return value * 1_000
-        case .MB:
-            return value * 1_000 * 1_000
-        case .GB:
-            return value * 1_000 * 1_000 * 1_000
-        case .TB:
-            return value * 1_000 * 1_000 * 1_000 * 1_000
-        default:
-            return value
+        case .KB: return value * 1_000
+        case .MB: return value * 1_000 * 1_000
+        case .GB: return value * 1_000 * 1_000 * 1_000
+        case .TB: return value * 1_000 * 1_000 * 1_000 * 1_000
+        default: return value
         }
     }
 }
@@ -230,9 +201,7 @@ public class CPU: NSObject {
 
         #if DEBUG
             if result != KERN_SUCCESS {
-                fatalError(
-                    "ERROR - \(#file):\(#function) - kern_result_t = "
-                        + "\(result)")
+                fatalError("ERROR - \(#file):\(#function) - kern_result_t = " + "\(result)")
             }
         #endif
 
@@ -276,21 +245,18 @@ public class CPU: NSObject {
 
         if result != KERN_SUCCESS { return 0 }
 
-        return (0..<Int(threadCount))
-            .compactMap { index -> Float? in
-                var threadInfoCount = UInt32(THREAD_INFO_MAX)
-                result = withUnsafeMutablePointer(to: &threadInfo) {
-                    $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
-                        thread_info(
-                            threadList[index], UInt32(THREAD_BASIC_INFO), $0, &threadInfoCount)
-                    }
+        return (0..<Int(threadCount)).compactMap { index -> Float? in
+            var threadInfoCount = UInt32(THREAD_INFO_MAX)
+            result = withUnsafeMutablePointer(to: &threadInfo) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                    thread_info(threadList[index], UInt32(THREAD_BASIC_INFO), $0, &threadInfoCount)
                 }
-                if result != KERN_SUCCESS { return nil }
-                let isIdle = threadInfo.flags == TH_FLAGS_IDLE
-
-                return !isIdle ? (Float(threadInfo.cpu_usage) / Float(TH_USAGE_SCALE)) * 100 : nil
             }
-            .reduce(0, +)
+            if result != KERN_SUCCESS { return nil }
+            let isIdle = threadInfo.flags == TH_FLAGS_IDLE
+
+            return !isIdle ? (Float(threadInfo.cpu_usage) / Float(TH_USAGE_SCALE)) * 100 : nil
+        }.reduce(0, +)
     }
 
     private static var processorPrevious: processor_info_array_t?
@@ -305,18 +271,12 @@ public class CPU: NSObject {
                 == host_processor_info(
                     mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &cpuCount, &cpuInfoArray,
                     &cpuInfoCount)
-        else {
-            return [ProcessorUsage]()
-        }
+        else { return [ProcessorUsage]() }
 
         do {
-            guard cpuCount > 0 else {
-                return [ProcessorUsage]()
-            }
+            guard cpuCount > 0 else { return [ProcessorUsage]() }
 
-            guard let cpuInfoArray = cpuInfoArray else {
-                return [ProcessorUsage]()
-            }
+            guard let cpuInfoArray = cpuInfoArray else { return [ProcessorUsage]() }
 
             defer {
                 vm_deallocate(

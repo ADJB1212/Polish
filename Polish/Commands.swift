@@ -25,40 +25,33 @@ class Commands {
             return
         }
 
-
         var fullOutput = "Starting Homebrew Cleaning...\n"
         completion(fullOutput)
-
 
         let cmd1 = "PATH=$PATH:/usr/local/bin:/opt/homebrew/bin brew cleanup"
         let cmd2 = "PATH=$PATH:/usr/local/bin:/opt/homebrew/bin brew autoremove"
 
-
         let brewCheckCommand = "command -v brew"
         safeRunCommandSequential(brewCheckCommand, timeout: 10) { brewCheckOutput, brewCheckError in
             if let error = brewCheckError {
-                fullOutput +=
-                    "\nError: Homebrew is not installed or not in PATH. Please install Homebrew from https:
+                fullOutput += "\nError: Homebrew is not installed or not in PATH."
                 fullOutput += "Details: \(error.localizedDescription)\n"
                 completion(fullOutput)
                 return
             }
-
 
             fullOutput += "\nRunning: brew cleanup\n"
             completion(fullOutput)
 
             safeRunCommandSequential(cmd1, timeout: 180) { output1, error1 in
                 if let error = error1 {
-                    fullOutput +=
-                        "Warning during brew cleanup: \(error.localizedDescription)\n"
+                    fullOutput += "Warning during brew cleanup: \(error.localizedDescription)\n"
                     fullOutput += "Output: \(output1)\n"
                     fullOutput += "(Continuing with next step anyway)\n"
                 } else {
                     fullOutput += "\(output1)\n"
                 }
                 completion(fullOutput)
-
 
                 fullOutput += "\nRunning: brew autoremove\n"
                 completion(fullOutput)
@@ -74,7 +67,6 @@ class Commands {
                     }
                     completion(fullOutput)
 
-
                 }
             }
         }
@@ -89,18 +81,15 @@ class Commands {
             return
         }
 
-
         if pipCommand.contains("rm") || pipCommand.contains("sudo") || pipCommand.contains(";") {
             completion("Unsafe pip command detected. Operation aborted.")
             return
         }
 
-
         if isDuplicateCommand("pip_\(pipCommand)") {
             completion("This command was recently run. Please wait before trying again.")
             return
         }
-
 
         let command = """
             # Limit maximum subprocesses
@@ -166,7 +155,6 @@ class Commands {
 
         let pathForShell = Helper.escapePathForShell(path)
 
-
         if pathForShell.contains("..") || pathForShell.contains("*") || pathForShell == "/"
             || pathForShell.hasPrefix("/bin") || pathForShell.hasPrefix("/usr")
             || pathForShell.hasPrefix("/System") || pathForShell.hasPrefix("/Applications")
@@ -214,7 +202,6 @@ class Commands {
                 return
             }
 
-
             if ProcessManager.shared.getActiveProcessCount() >= 5 {
                 completion(
                     "",
@@ -223,7 +210,6 @@ class Commands {
                         userInfo: [NSLocalizedDescriptionKey: "Too many active processes"]))
                 return
             }
-
 
             ProcessManager.shared.waitForAvailableSlot()
 
@@ -235,7 +221,6 @@ class Commands {
             task.arguments = ["-c", "ulimit -u 50; " + command]
             task.standardOutput = pipe
             task.standardError = pipe
-
 
             let timeoutTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
             timeoutTimer.setEventHandler {
@@ -256,15 +241,12 @@ class Commands {
 
             let outHandle = pipe.fileHandleForReading
 
-
             ProcessManager.shared.addProcess(task)
 
             outHandle.readabilityHandler = { fileHandle in
                 if let line = String(data: fileHandle.availableData, encoding: .utf8), !line.isEmpty
                 {
-                    DispatchQueue.main.async {
-                        outputText += line
-                    }
+                    DispatchQueue.main.async { outputText += line }
                 }
             }
 
@@ -274,15 +256,12 @@ class Commands {
                 DispatchQueue.global(qos: .background).async {
                     task.waitUntilExit()
 
-
                     timeoutTimer.cancel()
-
 
                     ProcessManager.shared.removeProcess(task)
 
                     DispatchQueue.main.async {
                         outHandle.readabilityHandler = nil
-
 
                         try? pipe.fileHandleForReading.close()
                         try? pipe.fileHandleForWriting.close()
@@ -304,9 +283,7 @@ class Commands {
 
                 timeoutTimer.cancel()
 
-
                 ProcessManager.shared.removeProcess(task)
-
 
                 try? pipe.fileHandleForReading.close()
                 try? pipe.fileHandleForWriting.close()
@@ -338,7 +315,6 @@ class Commands {
 
             print("Executing command: \(command)")
 
-
             if !checkSystemResources() {
                 completion(
                     "System resources are low. Command not executed: \(command)",
@@ -348,25 +324,21 @@ class Commands {
                 return
             }
 
-
             ProcessManager.shared.waitForAvailableSlot()
 
             var outputText = ""
             let task = Process()
             let pipe = Pipe()
 
-
             task.executableURL = URL(fileURLWithPath: "/bin/sh")
             task.arguments = ["-c", command]
             task.standardOutput = pipe
             task.standardError = pipe
 
-
             var env = ProcessInfo.processInfo.environment
             let pathExt = ":/usr/local/bin:/opt/homebrew/bin"
             env["PATH"] = (env["PATH"] ?? "") + pathExt
             task.environment = env
-
 
             let timeoutTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global())
             timeoutTimer.setEventHandler {
@@ -388,14 +360,11 @@ class Commands {
 
             let outHandle = pipe.fileHandleForReading
 
-
             ProcessManager.shared.addProcess(task)
 
             outHandle.readabilityHandler = { fileHandle in
                 let availableData = fileHandle.availableData
-                if availableData.isEmpty {
-                    return
-                }
+                if availableData.isEmpty { return }
 
                 if let line = String(data: availableData, encoding: .utf8) {
 
@@ -414,15 +383,12 @@ class Commands {
                     let status = task.terminationStatus
                     print("Command completed with status: \(status)")
 
-
                     timeoutTimer.cancel()
-
 
                     ProcessManager.shared.removeProcess(task)
 
                     DispatchQueue.main.async {
                         outHandle.readabilityHandler = nil
-
 
                         try? pipe.fileHandleForReading.close()
                         try? pipe.fileHandleForWriting.close()
@@ -430,7 +396,6 @@ class Commands {
                         if status == 0 {
                             completion(outputText, nil)
                         } else {
-
 
                             let error = NSError(
                                 domain: "com.polish", code: Int(status),
@@ -445,12 +410,9 @@ class Commands {
             } catch {
                 print("Failed to run command: \(error.localizedDescription)")
 
-
                 timeoutTimer.cancel()
 
-
                 ProcessManager.shared.removeProcess(task)
-
 
                 try? pipe.fileHandleForReading.close()
                 try? pipe.fileHandleForWriting.close()
@@ -473,18 +435,15 @@ class Commands {
         }
     }
 
-
     private static func isDuplicateCommand(_ commandKey: String) -> Bool {
         let now = Date()
         var isDuplicate = false
-
 
         commandQueue.sync {
 
             recentCommands = recentCommands.filter {
                 now.timeIntervalSince($0.value) < commandCooldown
             }
-
 
             if let lastRun = recentCommands[commandKey],
                 now.timeIntervalSince(lastRun) < commandCooldown
@@ -499,71 +458,62 @@ class Commands {
         return isDuplicate
     }
 
-
     static func checkSystemResources() -> Bool {
 
-
         var totalSize: Double = 0
-       var stats1 = host_basic_info()
-               var count1 = UInt32(MemoryLayout<host_basic_info_data_t>.size / MemoryLayout<integer_t>.size)
+        var stats1 = host_basic_info()
+        var count1 = UInt32(
+            MemoryLayout<host_basic_info_data_t>.size / MemoryLayout<integer_t>.size)
 
-               let kerr: kern_return_t = withUnsafeMutablePointer(to: &stats1) {
-                   $0.withMemoryRebound(to: integer_t.self, capacity: Int(count1)) {
-                       host_info(mach_host_self(), HOST_BASIC_INFO, $0, &count1)
-                   }
-               }
+        let kerr: kern_return_t = withUnsafeMutablePointer(to: &stats1) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count1)) {
+                host_info(mach_host_self(), HOST_BASIC_INFO, $0, &count1)
+            }
+        }
 
-               if kerr == KERN_SUCCESS {
-                   totalSize = Double(stats1.max_mem)
-               }
+        if kerr == KERN_SUCCESS { totalSize = Double(stats1.max_mem) }
 
-       var count = UInt32(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
-       var stats = vm_statistics64()
+        var count = UInt32(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
+        var stats = vm_statistics64()
 
-       let result: kern_return_t = withUnsafeMutablePointer(to: &stats) {
-                   $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
-                       host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
-                   }
-               }
+        let result: kern_return_t = withUnsafeMutablePointer(to: &stats) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+            }
+        }
 
-       if result == KERN_SUCCESS {
-           let active = Double(stats.active_count) * Double(vm_page_size)
-                       let speculative = Double(stats.speculative_count) * Double(vm_page_size)
-                       let inactive = Double(stats.inactive_count) * Double(vm_page_size)
-                       let wired = Double(stats.wire_count) * Double(vm_page_size)
-                       let compressed = Double(stats.compressor_page_count) * Double(vm_page_size)
-                       let purgeable = Double(stats.purgeable_count) * Double(vm_page_size)
-                       let external = Double(stats.external_page_count) * Double(vm_page_size)
-                       let swapins = Int64(stats.swapins)
-                       let swapouts = Int64(stats.swapouts)
+        if result == KERN_SUCCESS {
+            let active = Double(stats.active_count) * Double(vm_page_size)
+            let speculative = Double(stats.speculative_count) * Double(vm_page_size)
+            let inactive = Double(stats.inactive_count) * Double(vm_page_size)
+            let wired = Double(stats.wire_count) * Double(vm_page_size)
+            let compressed = Double(stats.compressor_page_count) * Double(vm_page_size)
+            let purgeable = Double(stats.purgeable_count) * Double(vm_page_size)
+            let external = Double(stats.external_page_count) * Double(vm_page_size)
+            let swapins = Int64(stats.swapins)
+            let swapouts = Int64(stats.swapouts)
 
-                       let used = active + inactive + speculative + wired + compressed - purgeable - external
-                       let free = totalSize - used
+            let used = active + inactive + speculative + wired + compressed - purgeable - external
+            let free = totalSize - used
 
-
-           var cpuUsage = CPU.systemUsage().user / 100
-
-
+            var cpuUsage = CPU.systemUsage().user / 100
 
             let processCount = ProcessManager.shared.getActiveProcessCount()
-
 
             let memoryThreshold = 0.85
             let cpuThreshold = 0.80
             let processThreshold = 8
 
-           print("Memory usage: \(used / totalSize)")
-           print("CPU Usage: \(cpuUsage)")
-           print("Processes: \(processCount)")
+            print("Memory usage: \(used / totalSize)")
+            print("CPU Usage: \(cpuUsage)")
+            print("Processes: \(processCount)")
 
-
-           let memoryOK = (used / totalSize) < memoryThreshold
+            let memoryOK = (used / totalSize) < memoryThreshold
             let cpuOK = cpuUsage < cpuThreshold
             let processCountOK = processCount < processThreshold
 
             return memoryOK && cpuOK && processCountOK
         }
-
 
         return true
     }
@@ -572,11 +522,9 @@ class Commands {
 class ProcessManager {
     static let shared = ProcessManager()
 
-
     private let maxConcurrentProcesses = 5
     private let maxProcessTimeSeconds = 60
     private let processCheckInterval: TimeInterval = 1.0
-
 
     private var activeProcesses = [(process: Process, launchDate: Date)]()
     private var timer: Timer?
@@ -588,14 +536,11 @@ class ProcessManager {
         startMonitoring()
     }
 
-    deinit {
-        stopMonitoring()
-    }
+    deinit { stopMonitoring() }
 
     func startMonitoring() {
         timer = Timer.scheduledTimer(withTimeInterval: processCheckInterval, repeats: true) {
-            [weak self] _ in
-            self?.checkProcesses()
+            [weak self] _ in self?.checkProcesses()
         }
     }
 
@@ -608,9 +553,7 @@ class ProcessManager {
         queue.async { [weak self] in
             guard let self = self else { return }
 
-
             let processesCopy = self.queue.sync { return self.activeProcesses }
-
 
             for (process, launchDate) in processesCopy {
 
@@ -622,7 +565,6 @@ class ProcessManager {
                             "Terminated long-running process after \(Date().timeIntervalSince(launchDate)) seconds"
                         )
                     }
-
 
                     self.removeProcess(process)
                 }
@@ -650,9 +592,7 @@ class ProcessManager {
 
     func getActiveProcessCount() -> Int {
         var count = 0
-        queue.sync {
-            count = activeProcesses.count
-        }
+        queue.sync { count = activeProcesses.count }
         return count
     }
 
@@ -661,17 +601,12 @@ class ProcessManager {
             guard let self = self else { return }
 
             for (process, _) in self.activeProcesses {
-                if process.isRunning {
-                    process.terminate()
-                }
+                if process.isRunning { process.terminate() }
             }
 
             self.activeProcesses.removeAll()
 
-
-            for _ in 0..<self.maxConcurrentProcesses {
-                self.semaphore.signal()
-            }
+            for _ in 0..<self.maxConcurrentProcesses { self.semaphore.signal() }
         }
     }
 }
