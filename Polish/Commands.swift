@@ -30,15 +30,7 @@ class Commands {
 
         let cmd1 = "PATH=$PATH:/usr/local/bin:/opt/homebrew/bin brew cleanup"
         let cmd2 = "PATH=$PATH:/usr/local/bin:/opt/homebrew/bin brew autoremove"
-
-        let brewCheckCommand = "command -v brew"
-        safeRunCommandSequential(brewCheckCommand, timeout: 10) { brewCheckOutput, brewCheckError in
-            if let error = brewCheckError {
-                fullOutput += "\nError: Homebrew is not installed or not in PATH."
-                fullOutput += "Details: \(error.localizedDescription)\n"
-                completion(fullOutput)
-                return
-            }
+        
 
             fullOutput += "\nRunning: brew cleanup\n"
             completion(fullOutput)
@@ -65,101 +57,102 @@ class Commands {
                     } else {
                         fullOutput += "\(output2)\n"
                     }
+                    fullOutput += "\nFinished cleaning Homebrew\n"
                     completion(fullOutput)
+                    
 
                 }
             }
         }
-    }
+    
 
     static func runPipCommandForAllPythons(
         pipCommand: String, completion: @escaping (String) -> Void
     ) {
-
+        
         if !checkSystemResources() {
-            completion("System resources are low. Please try again later.")
-            return
+                completion("System resources are low. Please try again later.")
+                return
+            }
+
+            if pipCommand.contains("rm") || pipCommand.contains("sudo") || pipCommand.contains(";") {
+                completion("Unsafe pip command detected. Operation aborted.")
+                return
+            }
+
+            if isDuplicateCommand("pip_\(pipCommand)") {
+                completion("This command was recently run. Please wait before trying again.")
+                return
+            }
+
+            // Print diagnostics before running
+            let diagnostics = ProcessManager.shared.getSystemDiagnostics()
+            print(diagnostics)
+            
+            let command = """
+         # Collect Python paths
+         PYTHON_PATHS=$(
+         {
+             # Standard path executables
+             which -a python python2 python3 python3.9 python3.10 python3.11 python3.12 2>/dev/null
+         
+             # Homebrew installations
+             for brewpath in /usr/local/bin /opt/homebrew/bin; do
+                 if [ -d "$brewpath" ]; then
+                     ls -1 $brewpath/python* 2>/dev/null | grep -v config
+                 fi
+             done
+         
+             # Check pyenv if installed
+             if command -v pyenv >/dev/null; then
+                 pyenv which python 2>/dev/null
+                 for ver in $(pyenv versions --bare 2>/dev/null); do
+                     echo "$HOME/.pyenv/versions/$ver/bin/python"
+                 done
+             fi
+         
+             # Check conda environments if conda exists
+             if command -v conda >/dev/null; then
+                 conda info --envs 2>/dev/null | grep -v "#" | awk '{print $NF"/bin/python"}' | grep -v "^/"
+             fi
+         } | sort | uniq | xargs -I{} sh -c 'if [ -x "{}" ] && [ -f "{}" ]; then echo "{}"; fi'
+         )
+         
+         # If no Python installations found, try with default python3
+         if [ -z "$PYTHON_PATHS" ]; then
+             if command -v python3 >/dev/null; then
+                 python3 -m pip \(pipCommand)
+             fi
+             exit 0
+         fi
+         
+         # Process each Python installation
+         echo "$PYTHON_PATHS" | while read python_exe; do
+             # Skip empty lines
+             [ -z "$python_exe" ] && continue
+         
+             $python_exe --version
+             $python_exe -m pip \(pipCommand)
+         done
+         """
+            
+            runUnsafeCommand(command: command, completion: completion)
         }
-
-        if pipCommand.contains("rm") || pipCommand.contains("sudo") || pipCommand.contains(";") {
-            completion("Unsafe pip command detected. Operation aborted.")
-            return
-        }
-
-        if isDuplicateCommand("pip_\(pipCommand)") {
-            completion("This command was recently run. Please wait before trying again.")
-            return
-        }
-
-        let command = """
-            # Limit maximum subprocesses
-            ulimit -u 50
-
-            # Collect Python paths
-            PYTHON_PATHS=$(
-            {
-                # Standard path executables
-                which -a python python2 python3 python3.9 python3.10 python3.11 python3.12 2>/dev/null
-
-                # Homebrew installations
-                for brewpath in /usr/local/bin /opt/homebrew/bin; do
-                    if [ -d "$brewpath" ]; then
-                        ls -1 $brewpath/python* 2>/dev/null | grep -v config | head -n 5
-                    fi
-                done
-
-                # Check pyenv if installed
-                if command -v pyenv >/dev/null; then
-                    pyenv which python 2>/dev/null
-                    for ver in $(pyenv versions --bare 2>/dev/null | head -n 5); do
-                        echo "$HOME/.pyenv/versions/$ver/bin/python"
-                    done
-                fi
-
-                # Check conda environments if conda exists
-                if command -v conda >/dev/null; then
-                    conda info --envs 2>/dev/null | grep -v "#" | awk '{print $NF"/bin/python"}' | grep -v "^/" | head -n 5
-                fi
-            } | sort | uniq | head -n 10 | xargs -I{} sh -c 'if [ -x "{}" ] && [ -f "{}" ]; then echo "{}"; fi'
-            )
-
-            # If no Python installations found, try with default python3
-            if [ -z "$PYTHON_PATHS" ]; then
-                if command -v python3 >/dev/null; then
-                    timeout 30 python3 -m pip \(pipCommand)
-                fi
-                exit 0
-            fi
-
-            # Process each Python installation with timeout
-            echo "$PYTHON_PATHS" | while read python_exe; do
-                # Skip empty lines
-                [ -z "$python_exe" ] && continue
-
-                echo "Running with $python_exe"
-                $python_exe --version
-                timeout 30 $python_exe -m pip \(pipCommand)
-                echo "---------------------"
-            done
-            """
-
-        safeRunCommand(command: command, timeout: 180, completion: completion)
-    }
+    
 
     static func removeFileOrDirectory(path: String, completion: @escaping (Any) -> Void) {
 
-        if !checkSystemResources() {
-            completion("System resources are low. Please try again later.")
-            return
-        }
+        
 
         let pathForShell = Helper.escapePathForShell(path)
+        print(pathForShell)
 
         if pathForShell.contains("..") || pathForShell.contains("*") || pathForShell == "/"
             || pathForShell.hasPrefix("/bin") || pathForShell.hasPrefix("/usr")
             || pathForShell.hasPrefix("/System") || pathForShell.hasPrefix("/Applications")
         {
             completion("Safety check failed: Cannot remove system directories")
+            print("Safety check failed: Cannot remove system directories")
             return
         }
 
@@ -192,7 +185,7 @@ class Commands {
         command: String, timeout: TimeInterval, completion: @escaping (String, Error?) -> Void
     ) {
         commandQueue.async {
-
+            // First check system resources
             if !checkSystemResources() {
                 completion(
                     "",
@@ -202,15 +195,10 @@ class Commands {
                 return
             }
 
-            if ProcessManager.shared.getActiveProcessCount() >= 5 {
-                completion(
-                    "",
-                    NSError(
-                        domain: "com.polish", code: 2,
-                        userInfo: [NSLocalizedDescriptionKey: "Too many active processes"]))
-                return
-            }
-
+            // Clean up any zombie processes
+            ProcessManager.shared.cleanupZombieProcesses()
+            
+            // Wait for an available slot
             ProcessManager.shared.waitForAvailableSlot()
 
             var outputText = ""
@@ -218,7 +206,7 @@ class Commands {
             let pipe = Pipe()
 
             task.executableURL = URL(fileURLWithPath: "/bin/bash")
-            task.arguments = ["-c", "ulimit -u 50; " + command]
+            task.arguments = ["-c", command]
             task.standardOutput = pipe
             task.standardError = pipe
 
@@ -228,8 +216,7 @@ class Commands {
                     task.terminate()
                     DispatchQueue.main.async {
                         completion(
-                            outputText
-                                + "\n\n*** Command timed out after \(Int(timeout)) seconds ***",
+                            outputText + "\n\n*** Command timed out after \(Int(timeout)) seconds ***",
                             NSError(
                                 domain: "com.polish", code: 3,
                                 userInfo: [NSLocalizedDescriptionKey: "Command timed out"]))
@@ -241,11 +228,8 @@ class Commands {
 
             let outHandle = pipe.fileHandleForReading
 
-            ProcessManager.shared.addProcess(task)
-
             outHandle.readabilityHandler = { fileHandle in
-                if let line = String(data: fileHandle.availableData, encoding: .utf8), !line.isEmpty
-                {
+                if let line = String(data: fileHandle.availableData, encoding: .utf8), !line.isEmpty {
                     DispatchQueue.main.async { outputText += line }
                 }
             }
@@ -255,10 +239,8 @@ class Commands {
 
                 DispatchQueue.global(qos: .background).async {
                     task.waitUntilExit()
-
                     timeoutTimer.cancel()
-
-                    ProcessManager.shared.removeProcess(task)
+                    ProcessManager.shared.processCompleted()
 
                     DispatchQueue.main.async {
                         outHandle.readabilityHandler = nil
@@ -280,10 +262,8 @@ class Commands {
                     }
                 }
             } catch {
-
                 timeoutTimer.cancel()
-
-                ProcessManager.shared.removeProcess(task)
+                ProcessManager.shared.processCompleted()
 
                 try? pipe.fileHandleForReading.close()
                 try? pipe.fileHandleForWriting.close()
@@ -360,7 +340,6 @@ class Commands {
 
             let outHandle = pipe.fileHandleForReading
 
-            ProcessManager.shared.addProcess(task)
 
             outHandle.readabilityHandler = { fileHandle in
                 let availableData = fileHandle.availableData
@@ -385,7 +364,6 @@ class Commands {
 
                     timeoutTimer.cancel()
 
-                    ProcessManager.shared.removeProcess(task)
 
                     DispatchQueue.main.async {
                         outHandle.readabilityHandler = nil
@@ -412,7 +390,6 @@ class Commands {
 
                 timeoutTimer.cancel()
 
-                ProcessManager.shared.removeProcess(task)
 
                 try? pipe.fileHandleForReading.close()
                 try? pipe.fileHandleForWriting.close()
@@ -434,6 +411,47 @@ class Commands {
             }
         }
     }
+    
+    private static func runUnsafeCommand(command: String, completion: @escaping (String) -> Void) {
+        var outputText = ""
+     
+             let task = Process()
+             let pipe = Pipe()
+     
+             task.executableURL = URL(fileURLWithPath: "/bin/bash")
+             task.arguments = ["-c", command]
+             task.standardOutput = pipe
+             task.standardError = pipe
+     
+             let outHandle = pipe.fileHandleForReading
+     
+             outHandle.readabilityHandler = { fileHandle in
+                 if let line = String(data: fileHandle.availableData, encoding: .utf8) {
+                     DispatchQueue.main.async {
+                         outputText += line
+                         completion(outputText)
+                     }
+                 }
+             }
+             do {
+                 try task.run()
+     
+                 DispatchQueue.global(qos: .background).async {
+                     task.waitUntilExit()
+     
+                     DispatchQueue.main.async {
+                         outputText += "\nFinished with exit code: \(task.terminationStatus)"
+                         outHandle.readabilityHandler = nil
+                         completion(outputText)
+                     }
+                 }
+             } catch {
+                 DispatchQueue.main.async {
+                     outputText += "\nError: \(error.localizedDescription)"
+                     completion(outputText)
+                 }
+             }
+         }
 
     private static func isDuplicateCommand(_ commandKey: String) -> Bool {
         let now = Date()
@@ -490,8 +508,6 @@ class Commands {
             let compressed = Double(stats.compressor_page_count) * Double(vm_page_size)
             let purgeable = Double(stats.purgeable_count) * Double(vm_page_size)
             let external = Double(stats.external_page_count) * Double(vm_page_size)
-            let swapins = Int64(stats.swapins)
-            let swapouts = Int64(stats.swapouts)
 
             let used = active + inactive + speculative + wired + compressed - purgeable - external
             let free = totalSize - used
@@ -502,7 +518,7 @@ class Commands {
 
             let memoryThreshold = 0.85
             let cpuThreshold = 0.80
-            let processThreshold = 8
+            let processThreshold = Int(ProcessManager.shared.getUserProcessLimit() / 3)
 
             print("Memory usage: \(used / totalSize)")
             print("CPU Usage: \(cpuUsage)")
@@ -521,92 +537,153 @@ class Commands {
 
 class ProcessManager {
     static let shared = ProcessManager()
-
+    
     private let maxConcurrentProcesses = 5
-    private let maxProcessTimeSeconds = 60
-    private let processCheckInterval: TimeInterval = 1.0
-
-    private var activeProcesses = [(process: Process, launchDate: Date)]()
-    private var timer: Timer?
     private let queue = DispatchQueue(label: "com.polish.processManager", attributes: .concurrent)
     private let semaphore: DispatchSemaphore
-
+    
     private init() {
         semaphore = DispatchSemaphore(value: maxConcurrentProcesses)
-        startMonitoring()
     }
-
-    deinit { stopMonitoring() }
-
-    func startMonitoring() {
-        timer = Timer.scheduledTimer(withTimeInterval: processCheckInterval, repeats: true) {
-            [weak self] _ in self?.checkProcesses()
-        }
-    }
-
-    func stopMonitoring() {
-        timer?.invalidate()
-        timer = nil
-    }
-
-    private func checkProcesses() {
-        queue.async { [weak self] in
-            guard let self = self else { return }
-
-            let processesCopy = self.queue.sync { return self.activeProcesses }
-
-            for (process, launchDate) in processesCopy {
-
-                if Date().timeIntervalSince(launchDate) > TimeInterval(self.maxProcessTimeSeconds) {
-
-                    if process.isRunning {
-                        process.terminate()
-                        print(
-                            "Terminated long-running process after \(Date().timeIntervalSince(launchDate)) seconds"
-                        )
-                    }
-
-                    self.removeProcess(process)
-                }
+    
+    // Gets the actual number of processes running for the current user
+    func getActiveProcessCount() -> Int {
+        let task = Process()
+        let pipe = Pipe()
+        
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "ps -u $USER | wc -l"]
+        task.standardOutput = pipe
+        task.standardError = pipe
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            if let data = try? pipe.fileHandleForReading.readToEnd(),
+               let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               let count = Int(output) {
+                // Subtract 1 to account for the header line in ps output
+                return max(0, count - 1)
             }
+        } catch {
+            print("Error getting process count: \(error.localizedDescription)")
         }
+        
+        return 0  // Return 0 if we couldn't get the count
     }
-
-    func addProcess(_ process: Process) {
-        queue.async(flags: .barrier) { [weak self] in
-            self?.activeProcesses.append((process: process, launchDate: Date()))
+    
+    // Returns true if the system has capacity for more processes
+    func hasCapacityForNewProcess() -> Bool {
+        let currentCount = getActiveProcessCount()
+        let processorCount = ProcessInfo.processInfo.processorCount
+        
+        // Get the system's max user processes limit
+        let userLimit = getUserProcessLimit()
+        print(userLimit)
+        
+        // Define a safe threshold based on system capability
+        let threshold = userLimit / 3
+        
+        print("Current processes: \(currentCount), Threshold: \(threshold), CPU count: \(processorCount)")
+        
+        return Double(currentCount) < threshold
+    }
+    
+    // Gets the user process limit from the system
+     func getUserProcessLimit() -> Double {
+        let task = Process()
+        let pipe = Pipe()
+        
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "ulimit -u"]
+        task.standardOutput = pipe
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            
+            if let data = try? pipe.fileHandleForReading.readToEnd(),
+               let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               let limit = Double(output) {
+                return limit
+            }
+        } catch {
+            print("Error getting user process limit: \(error.localizedDescription)")
         }
+        
+        return 1000.0  // Default fallback value
     }
-
-    func removeProcess(_ process: Process) {
-        queue.async(flags: .barrier) { [weak self] in
-            self?.activeProcesses.removeAll(where: { $0.process === process })
-            self?.semaphore.signal()
-        }
-    }
-
+    
+    // Waits for capacity to run a new process
     func waitForAvailableSlot() {
-
+        // First try with a real system check
+        if hasCapacityForNewProcess() {
+            return  // We have capacity, return immediately
+        }
+        
+        // If we don't have capacity, use the semaphore as backup
         semaphore.wait()
     }
-
-    func getActiveProcessCount() -> Int {
-        var count = 0
-        queue.sync { count = activeProcesses.count }
-        return count
+    
+    // Signals that a process has completed
+    func processCompleted() {
+        semaphore.signal()
     }
-
-    func terminateAllProcesses() {
-        queue.async(flags: .barrier) { [weak self] in
-            guard let self = self else { return }
-
-            for (process, _) in self.activeProcesses {
-                if process.isRunning { process.terminate() }
-            }
-
-            self.activeProcesses.removeAll()
-
-            for _ in 0..<self.maxConcurrentProcesses { self.semaphore.signal() }
+    
+    // Cleanup zombie processes
+    func cleanupZombieProcesses() {
+        let task = Process()
+        
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "pkill -u $USER defunct || true"]
+        
+        do {
+            try task.run()
+            task.waitUntilExit()
+            print("Zombie process cleanup attempted")
+        } catch {
+            print("Error cleaning zombie processes: \(error.localizedDescription)")
         }
     }
+    
+    func getSystemDiagnostics() -> String {
+            let diagnosticCommands = [
+                "Process count: ps -u $USER | wc -l",
+                "Process limits: ulimit -a | grep processes",
+                "Load average: uptime"
+            ]
+            
+            var output = "System Diagnostics:\n"
+            
+            for cmdInfo in diagnosticCommands {
+                let parts = cmdInfo.split(separator: ":", maxSplits: 1)
+                if parts.count == 2 {
+                    let label = parts[0].trimmingCharacters(in: .whitespaces)
+                    let cmd = parts[1].trimmingCharacters(in: .whitespaces)
+                    
+                    let task = Process()
+                    let pipe = Pipe()
+                    
+                    task.executableURL = URL(fileURLWithPath: "/bin/sh")
+                    task.arguments = ["-c", cmd]
+                    task.standardOutput = pipe
+                    task.standardError = pipe
+                    
+                    do {
+                        try task.run()
+                        task.waitUntilExit()
+                        
+                        if let data = try? pipe.fileHandleForReading.readToEnd(),
+                           let result = String(data: data, encoding: .utf8) {
+                            output += "\n--- \(label) ---\n\(result)\n"
+                        }
+                    } catch {
+                        output += "\n--- \(label) ---\nError: \(error.localizedDescription)\n"
+                    }
+                }
+            }
+            
+            return output
+        }
 }

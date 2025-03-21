@@ -80,8 +80,8 @@ struct ContentView: View {
         let basePath = trashPath
         let basePathComponents = basePath.components(separatedBy: "/")
 
-        let totalSize = FindJunk.processFilesAndDirectories(at: trashPath) {
-            url, isDirectory, size in
+        let totalSize = FindJunk.processFilesAndDirectories(at: trashPath, skipHiddenFiles: false) {
+            url, isDirectory, size, depth in
 
             let path = url.path
             if !processedFiles.contains(path) {
@@ -96,11 +96,17 @@ struct ContentView: View {
                 let fileItem = FileItem(
                     name: url.lastPathComponent, path: path, isDirectory: isDirectory, size: size,
                     depth: relativeDepth, formattedSize: formattedSize)
+                
+                
+                
 
                 DispatchQueue.main.async {
-                    self.fileItems.append(fileItem)
+                    if(fileItem.depth < 4){
+                        self.fileItems.append(fileItem)
+                    }
                     self.scrollToBottom = true
                 }
+                
 
             }
         }
@@ -109,7 +115,16 @@ struct ContentView: View {
             if totalSize >= 0 {
                 let formattedTotalSize = ByteCountFormatter.string(
                     fromByteCount: totalSize, countStyle: .file)
-                self.totalSizeText = "Total size: \(formattedTotalSize) • All files processed"
+                self.totalSizeText = "Emptied trash. Removed \(formattedTotalSize)"
+                for file in processedFiles {
+                    let depth = (max(0, file.components(separatedBy: "/").count - basePathComponents.count))
+                    if (depth == 1) {
+                        Commands.removeFileOrDirectory(path: file) { output in
+                            outputText += output as! String
+                        }
+                    }
+                    
+                }
             } else {
                 self.totalSizeText = "Processing failed"
             }
@@ -142,7 +157,7 @@ struct ContentView: View {
                     self.scrollToBottom = true
                 }
 
-                if output.contains("All Homebrew operations completed.")
+                if output.contains("Finished cleaning Homebrew")
                     || output.contains("Error:")
                 {
                     self.isRunning = false
@@ -161,7 +176,7 @@ struct ContentView: View {
         }
 
         isRunning = true
-        outputText = outputText
+        outputText = self.outputText
         fileItems = []
 
         var outputBuffer = ""
@@ -169,7 +184,7 @@ struct ContentView: View {
 
         var files: [URL] = []
         files = await FindJunk.scanForUnneededFiles(
-            maxFilesToScan: 1000, maxDepth: 5,
+            maxFilesToScan: 500, maxDepth: 8,
             progress: { item in
 
                 var messageToAdd = ""
@@ -202,6 +217,12 @@ struct ContentView: View {
             self.outputText += "\nFile search completed. Found \(files.count) files.\n"
             self.isRunning = false
             self.scrollToBottom = true
+            let numToPrint = min(15, files.count)
+                if numToPrint > 0 {
+                    for i in 0..<numToPrint {
+                        print(files[i].path())
+                    }
+                }
         }
     }
 }
@@ -217,8 +238,8 @@ struct ButtonsView: View {
 
     var body: some View {
         VStack(spacing: 15) {
-            Button(action: clearTrash) {
-                Text(isRunning ? "Running..." : "Process Files").frame(minWidth: 200).padding()
+            Button(action: runBrewCleanup) {
+                Text(isRunning ? "Running..." : "Cleanup Homebrew").frame(minWidth: 200).padding()
                     .background(isRunning ? Color.gray : Color.blue).foregroundColor(.white)
                     .cornerRadius(10)
             }.disabled(isRunning)
@@ -235,6 +256,13 @@ struct ButtonsView: View {
                     .background(isRunning ? Color.gray : Color.orange).foregroundColor(.white)
                     .cornerRadius(10)
             }.disabled(isRunning)
+            
+            Button(action: clearTrash) {
+                Text(isRunning ? "Clearing..." : "Clear Trash").frame(minWidth: 200).padding()
+                    .background(isRunning ? Color.gray : Color.orange).foregroundColor(.white)
+                    .cornerRadius(10)
+            }.disabled(isRunning)
+                
         }
     }
 }
@@ -296,15 +324,16 @@ struct FileItemRow: View {
             ForEach(0..<(item.depth - 1), id: \.self) { _ in Spacer().frame(width: 20) }
 
             Image(systemName: item.isDirectory ? "folder" : "doc").foregroundColor(
-                item.isDirectory ? .blue : .gray)
+                item.isDirectory ? .blue : .black)
 
             Text(item.name).foregroundColor(.primary)
 
             Spacer()
 
-            if !item.isDirectory {
+            if(!item.isDirectory || (item.isDirectory && item.depth >= 3)){
                 Text(item.formattedSize).foregroundColor(.secondary).font(.caption)
             }
+            
         }.padding(.vertical, 2)
     }
 }

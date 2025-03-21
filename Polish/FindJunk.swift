@@ -11,7 +11,7 @@ import SwiftUI
 
 class FindJunk {
     static func scanForUnneededFiles(
-        maxFilesToScan: Int = 5000, maxDepth: Int = 6, progress: @escaping (Any) -> Void
+        maxFilesToScan: Int = 1000, maxDepth: Int = 6, progress: @escaping (Any) -> Void
     ) async -> [URL] {
 
         if !Commands.checkSystemResources() {
@@ -19,16 +19,16 @@ class FindJunk {
             return []
         }
 
-        let cacheDirectories: [String] = [
-            NSHomeDirectory() + "/Library/Caches", "/tmp", "/private/tmp",
+        let directoriesWithJunk: [String] = [
+            NSHomeDirectory() + "/Library/logs", "/Library/logs", "/var/log", NSHomeDirectory() + "/Library/Developer/Xcode/DerivedData"
         ]
 
         var results: [URL] = []
-        var fileManager = FileManager.default
+        let fileManager = FileManager.default
         var scannedFileCount = 0
 
         await withTaskGroup(of: [URL].self) { group in
-            for dirPath in cacheDirectories {
+            for dirPath in directoriesWithJunk {
                 let dirURL = URL(fileURLWithPath: dirPath)
 
                 group.addTask {
@@ -75,8 +75,6 @@ class FindJunk {
     ) async -> [URL] {
         var results: [URL] = []
         let fileManager = FileManager.default
-
-        progress(dirURL)
 
         var directoriesToScan = [(url: dirURL, depth: 0)]
         var scannedCount = 0
@@ -329,7 +327,7 @@ class FindJunk {
         return Set(allAppNames)
     }
 
-    static func processFilesAndDirectories(at path: String, handler: (URL, Bool, Int64) -> Void)
+    static func processFilesAndDirectories(at path: String, skipHiddenFiles: Bool, handler: (URL, Bool, Int64, Int) -> Void)
         -> Int64
     {
         let fileManager = FileManager.default
@@ -337,17 +335,21 @@ class FindJunk {
         let url = URL(fileURLWithPath: path)
         var totalSize: Int64 = 0
         var processedCount = 0
-        let maxItemsToProcess = 1000
+        let maxItemsToProcess = 10000
 
         guard fileManager.fileExists(atPath: path) else {
             print("Path does not exist: \(path)")
             return -1
         }
+        var options: FileManager.DirectoryEnumerationOptions = FileManager.DirectoryEnumerationOptions.init()
+        if(skipHiddenFiles){
+            options = .skipsHiddenFiles
+        }
 
         guard
             let enumerator = fileManager.enumerator(
                 at: url, includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
-                options: [.skipsHiddenFiles],
+                options: [options],
                 errorHandler: { (url, error) -> Bool in
                     print("Error accessing \(url): \(error)")
                     return true
@@ -376,8 +378,15 @@ class FindJunk {
                     fileSize = Int64(size)
                     totalSize += fileSize
                 }
+                else if (isDirectory){
+                    fileSize=Int64(calculateDirectorySize(itemURL))
+                }
+                let basePath = path
+                let basePathComponents = basePath.components(separatedBy: "/")
+                let pathComponents = path.components(separatedBy: "/")
+                let relativeDepth = max(0, pathComponents.count - basePathComponents.count)
 
-                handler(itemURL, isDirectory, fileSize)
+                handler(itemURL, isDirectory, fileSize, relativeDepth)
 
                 if processedCount % 100 == 0 { Thread.sleep(forTimeInterval: 0.001) }
             } catch { print("Error reading resource values for \(itemURL): \(error)") }
