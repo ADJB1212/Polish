@@ -96,9 +96,7 @@ struct ContentView: View {
                 let fileItem = FileItem(
                     name: url.lastPathComponent, path: path, isDirectory: isDirectory, size: size,
                     depth: relativeDepth, formattedSize: formattedSize)
-                
-                
-                
+
 
                 DispatchQueue.main.async {
                     if(fileItem.depth < 4){
@@ -109,6 +107,7 @@ struct ContentView: View {
                 
 
             }
+
         }
 
         DispatchQueue.main.async {
@@ -122,6 +121,7 @@ struct ContentView: View {
                         Commands.removeFileOrDirectory(path: file) { output in
                             outputText += output as! String
                         }
+                        
                     }
                     
                 }
@@ -184,7 +184,7 @@ struct ContentView: View {
 
         var files: [URL] = []
         files = await FindJunk.scanForUnneededFiles(
-            maxFilesToScan: 500, maxDepth: 8,
+            maxFilesToScan: 20000, maxDepth: 8,
             progress: { item in
 
                 var messageToAdd = ""
@@ -217,12 +217,6 @@ struct ContentView: View {
             self.outputText += "\nFile search completed. Found \(files.count) files.\n"
             self.isRunning = false
             self.scrollToBottom = true
-            let numToPrint = min(15, files.count)
-                if numToPrint > 0 {
-                    for i in 0..<numToPrint {
-                        print(files[i].path())
-                    }
-                }
         }
     }
 }

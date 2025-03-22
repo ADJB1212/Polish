@@ -11,7 +11,7 @@ import SwiftUI
 
 class FindJunk {
     static func scanForUnneededFiles(
-        maxFilesToScan: Int = 1000, maxDepth: Int = 6, progress: @escaping (Any) -> Void
+        maxFilesToScan: Int = 1000, maxDepth: Int = 8, progress: @escaping (Any) -> Void
     ) async -> [URL] {
 
         if !Commands.checkSystemResources() {
@@ -20,7 +20,7 @@ class FindJunk {
         }
 
         let directoriesWithJunk: [String] = [
-            NSHomeDirectory() + "/Library/logs", "/Library/logs", "/var/log", NSHomeDirectory() + "/Library/Developer/Xcode/DerivedData"
+            NSHomeDirectory() + "/Library/logs", "/Library/logs", "/var/log", NSHomeDirectory() + "/Library/Developer/Xcode/iOS\\ Device\\ Logs", NSHomeDirectory() + "/Library/Containers/*/Data/Library/Logs", NSHomeDirectory() + "/Library/Developer/Xcode/Archives", NSHomeDirectory() + "/Library/Developer/Xcode/DerivedData"
         ]
 
         var results: [URL] = []
@@ -29,11 +29,12 @@ class FindJunk {
 
         await withTaskGroup(of: [URL].self) { group in
             for dirPath in directoriesWithJunk {
+                
                 let dirURL = URL(fileURLWithPath: dirPath)
 
                 group.addTask {
                     return await scanDirectory(
-                        dirURL, maxDepth: maxDepth, maxFiles: maxFilesToScan / 3, progress: progress
+                        dirURL, maxDepth: maxDepth, maxFiles: maxFilesToScan, progress: progress
                     )
                 }
             }
@@ -335,7 +336,7 @@ class FindJunk {
         let url = URL(fileURLWithPath: path)
         var totalSize: Int64 = 0
         var processedCount = 0
-        let maxItemsToProcess = 10000
+        let maxItemsToProcess = 20000
 
         guard fileManager.fileExists(atPath: path) else {
             print("Path does not exist: \(path)")

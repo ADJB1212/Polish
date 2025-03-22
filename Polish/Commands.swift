@@ -141,43 +141,55 @@ class Commands {
     
 
     static func removeFileOrDirectory(path: String, completion: @escaping (Any) -> Void) {
-
-        
-
         let pathForShell = Helper.escapePathForShell(path)
-        print(pathForShell)
+       
 
         if pathForShell.contains("..") || pathForShell.contains("*") || pathForShell == "/"
             || pathForShell.hasPrefix("/bin") || pathForShell.hasPrefix("/usr")
             || pathForShell.hasPrefix("/System") || pathForShell.hasPrefix("/Applications")
         {
             completion("Safety check failed: Cannot remove system directories")
-            print("Safety check failed: Cannot remove system directories")
+            print("Safety check failed for \(URL(filePath: path).lastPathComponent): Cannot remove system directories")
             return
         }
 
         switch Helper.getPathType(path) {
         case .directory:
             safeRunCommand(command: "rm -rf \(pathForShell)", timeout: 30) { output, error in
+                //print("rm -rf \(pathForShell)")
                 if let error = error {
                     completion("Error removing directory at \(pathForShell): \(error)")
                 } else {
                     completion(output)
                 }
             }
-            break
         case .file:
             safeRunCommand(command: "rm -f \(pathForShell)", timeout: 10) { output, error in
+                //print("rm -f \(pathForShell)")
                 if let error = error {
                     completion("Error removing file at \(pathForShell): \(error)")
                 } else {
                     completion(output)
                 }
             }
-            break
+        case .symlink:
+            safeRunCommand(command: "unlink \(pathForShell)", timeout: 10) { output, error in
+                print("unlink \(pathForShell)")
+                if let error = error {
+                    // If unlink fails, fall back to rm -f which should work for most cases
+                    safeRunCommand(command: "rm -f \(pathForShell)", timeout: 10) { output2, error2 in
+                        if let error2 = error2 {
+                            completion("Error removing symlink at \(pathForShell): \(error2)")
+                        } else {
+                            completion(output2)
+                        }
+                    }
+                } else {
+                    completion(output)
+                }
+            }
         case .notFound:
             completion("Error: Item not found at \(pathForShell)\n")
-            break
         }
     }
 
@@ -510,9 +522,8 @@ class Commands {
             let external = Double(stats.external_page_count) * Double(vm_page_size)
 
             let used = active + inactive + speculative + wired + compressed - purgeable - external
-            let free = totalSize - used
 
-            var cpuUsage = CPU.systemUsage().user / 100
+            let cpuUsage = CPU.systemUsage().user / 100
 
             let processCount = ProcessManager.shared.getActiveProcessCount()
 
@@ -520,13 +531,17 @@ class Commands {
             let cpuThreshold = 0.80
             let processThreshold = Int(ProcessManager.shared.getUserProcessLimit() / 3)
 
-            print("Memory usage: \(used / totalSize)")
-            print("CPU Usage: \(cpuUsage)")
-            print("Processes: \(processCount)")
+           
 
             let memoryOK = (used / totalSize) < memoryThreshold
             let cpuOK = cpuUsage < cpuThreshold
             let processCountOK = processCount < processThreshold
+            
+            if(!memoryOK || !cpuOK || !processCountOK){
+                print("Memory usage: \(used / totalSize)")
+                print("CPU Usage: \(cpuUsage)")
+                print("Processes: \(processCount)")
+            }
 
             return memoryOK && cpuOK && processCountOK
         }
@@ -580,12 +595,15 @@ class ProcessManager {
         
         // Get the system's max user processes limit
         let userLimit = getUserProcessLimit()
-        print(userLimit)
+        
         
         // Define a safe threshold based on system capability
         let threshold = userLimit / 3
+        if(Double(currentCount) > threshold){
+            print("Exceeded process limit: \(userLimit)")
+        }
         
-        print("Current processes: \(currentCount), Threshold: \(threshold), CPU count: \(processorCount)")
+        
         
         return Double(currentCount) < threshold
     }
@@ -641,7 +659,6 @@ class ProcessManager {
         do {
             try task.run()
             task.waitUntilExit()
-            print("Zombie process cleanup attempted")
         } catch {
             print("Error cleaning zombie processes: \(error.localizedDescription)")
         }

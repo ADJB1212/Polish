@@ -13,6 +13,7 @@ class Helper {
     enum PathType {
         case directory
         case file
+        case symlink
         case notFound
     }
 
@@ -25,7 +26,24 @@ class Helper {
             decodedPath = path
         }
 
-        guard FileManager.default.fileExists(atPath: decodedPath, isDirectory: &isDir) else {
+        let fileManager = FileManager.default
+
+        // First check if it's a symlink
+        if fileManager.fileExists(atPath: decodedPath) {
+            var isSymLink = false
+            do {
+                let attributes = try fileManager.attributesOfItem(atPath: decodedPath)
+                isSymLink = attributes[.type] as? FileAttributeType == .typeSymbolicLink
+            } catch {
+                // Failed to get attributes, continue with normal checks
+            }
+
+            if isSymLink {
+                return .symlink
+            }
+        }
+
+        guard fileManager.fileExists(atPath: decodedPath, isDirectory: &isDir) else {
             return .notFound
         }
 
